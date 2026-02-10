@@ -15,6 +15,7 @@
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.1",
+    "fast-xml-parser": "^5.3.5",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.25",
@@ -22,7 +23,8 @@
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
     "tailwind-merge": "^3.4.0",
-    "youtube-transcript": "^1.2.1"
+    "youtube-transcript": "^1.2.1",
+    "youtubei.js": "^16.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -30,8 +30,50 @@ export async function generateStudyNotes(videoUrl: string) {
 
             transcriptText = transcriptItems.map(item => item.text).join(' ');
         } catch (transcriptError) {
-            console.error('Transcript Error:', transcriptError);
-            return { error: 'Failed to fetch video captions. The video might not have captions enabled or is restricted.' };
+            console.error('Standard Transcript Error:', transcriptError);
+            console.log('Attempting fallback with youtubei.js...');
+
+            try {
+                // Fallback: Use youtubei.js to get caption URL and fetch manually
+                const { Innertube, UniversalCache } = await import('youtubei.js');
+                const yt = await Innertube.create({ cache: new UniversalCache(false) });
+                const info = await yt.getInfo(videoId);
+
+                if (!info.captions || !info.captions.caption_tracks || info.captions.caption_tracks.length === 0) {
+                    throw new Error('No captions found in video metadata.');
+                }
+
+                // Prefer English
+                const track = info.captions.caption_tracks.find((t: any) => t.language_code === 'en') || info.captions.caption_tracks[0];
+                console.log('Fallback: Fetching captions from', track.base_url);
+
+                const response = await yt.session.http.fetch(track.base_url);
+                const transcriptXml = await response.text();
+
+                // Parse XML
+                const matches = transcriptXml.matchAll(/<text start="[\d.]+" dur="[\d.]+">([^<]+)<\/text>/g);
+                let fullText = '';
+                for (const match of matches) {
+                    let text = match[1]
+                        .replace(/&amp;/g, '&')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>')
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'");
+                    fullText += text + ' ';
+                }
+
+                if (!fullText) {
+                    throw new Error('Parsed transcript is empty.');
+                }
+
+                transcriptText = fullText;
+                console.log('Fallback success! Transcript length:', transcriptText.length);
+
+            } catch (fallbackError) {
+                console.error('Fallback Transcript Error:', fallbackError);
+                return { error: 'Failed to fetch video captions. The video might not have captions enabled or is restricted.' };
+            }
         }
 
         // 3. Generate Summary with Gemini
