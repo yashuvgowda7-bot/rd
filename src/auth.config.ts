@@ -1,4 +1,5 @@
-import type { NextAuthConfig, DefaultSession } from 'next-auth';
+import type { NextAuthConfig } from 'next-auth';
+import { NextResponse } from 'next/server';
 
 export const authConfig = {
     pages: {
@@ -16,7 +17,7 @@ export const authConfig = {
 
             if (isAuthPage) {
                 if (isLoggedIn) {
-                    return Response.redirect(new URL('/dashboard', nextUrl));
+                    return NextResponse.redirect(new URL('/dashboard', nextUrl));
                 }
                 return true;
             }
@@ -27,11 +28,11 @@ export const authConfig = {
 
             if (isLoggedIn) {
                 if (isAdminPage && userRole !== 'admin') {
-                    return Response.redirect(new URL('/dashboard', nextUrl));
+                    return NextResponse.redirect(new URL('/dashboard', nextUrl));
                 }
 
                 if (isDashboardPage && !isApproved && userRole !== 'admin') {
-                    return Response.redirect(new URL('/pending', nextUrl));
+                    return NextResponse.redirect(new URL('/pending', nextUrl));
                 }
             }
 
@@ -54,20 +55,5 @@ export const authConfig = {
             return session;
         },
     },
-    providers: [], // Add empty providers to satisfy NextAuthConfig type
+    providers: [],
 } satisfies NextAuthConfig;
-
-declare module 'next-auth' {
-    interface Session {
-        user: {
-            id: string;
-            role: string;
-            isApproved: boolean;
-        } & DefaultSession['user'];
-    }
-
-    interface User {
-        role?: string;
-        isApproved?: boolean;
-    }
-}
