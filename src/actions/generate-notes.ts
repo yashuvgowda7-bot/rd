@@ -1,15 +1,14 @@
 'use server';
 
 import { YoutubeTranscript } from 'youtube-transcript';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY; // Fallback
 
 export async function generateStudyNotes(videoUrl: string) {
     try {
-        if (!process.env.GEMINI_API_KEY) {
-            return { error: 'Gemini API Key is missing. Please configure it in your environment variables.' };
+        if (!OPENROUTER_API_KEY) {
+            return { error: 'Gemini/OpenRouter API Key is missing. Please configure it in your environment variables.' };
         }
-
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
         // 1. Extract Video ID
         const videoIdMatch = videoUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
@@ -76,10 +75,8 @@ export async function generateStudyNotes(videoUrl: string) {
             }
         }
 
-        // 3. Generate Summary with Gemini
+        // 3. Generate Summary with OpenRouter
         try {
-            const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
             const prompt = `
             You are an expert study assistant. I will provide you with a transcript of a video.
             Your task is to create high-quality, structured study notes.
@@ -95,13 +92,33 @@ export async function generateStudyNotes(videoUrl: string) {
             ${transcriptText.substring(0, 30000)} // Limit context to avoid token limits if video is huge
             `;
 
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            const markdownNotes = response.text();
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3000", // Optional: for OpenRouter rankings
+                    "X-Title": "RBAC Dashboard Study Tool", // Optional
+                },
+                body: JSON.stringify({
+                    "model": "google/gemini-2.0-flash-001", // Using Gemini via OpenRouter
+                    "messages": [
+                        { "role": "user", "content": prompt }
+                    ]
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(`OpenRouter API Error: ${response.status} - ${errorData}`);
+            }
+
+            const data = await response.json();
+            const markdownNotes = data.choices[0]?.message?.content || "No content generated.";
 
             return { notes: markdownNotes };
         } catch (aiError) {
-            console.error('Gemini API Error:', aiError);
+            console.error('AI API Error:', aiError);
             return { error: 'Failed to generate summary with AI. Please try again later.' };
         }
 
