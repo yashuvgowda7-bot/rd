@@ -55,6 +55,7 @@ export const authConfig = {
             return session;
         },
     },
+    session: { strategy: 'jwt' },
     providers: [],
-    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+    secret: process.env.NEXTAUTH_SECRET,
 } satisfies NextAuthConfig;
