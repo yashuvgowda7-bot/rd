@@ -14,28 +14,41 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     providers: [
         Credentials({
             async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) return null;
+                try {
+                    console.log('[AUTH] Starting authorization for:', credentials?.email);
+                    if (!credentials?.email || !credentials?.password) {
+                        console.log('[AUTH] Missing credentials');
+                        return null;
+                    }
 
-                const user = await db.query.users.findFirst({
-                    where: eq(users.email, credentials.email as string),
-                });
+                    console.log('[AUTH] Querying database...');
+                    const user = await db.query.users.findFirst({
+                        where: eq(users.email, credentials.email as string),
+                    });
+                    console.log('[AUTH] Database query result:', user ? 'User found' : 'User not found');
 
-                if (!user || !user.password) return null;
+                    if (!user || !user.password) return null;
 
-                const isPasswordValid = await bcrypt.compare(
-                    credentials.password as string,
-                    user.password
-                );
+                    console.log('[AUTH] Verifying password...');
+                    const isPasswordValid = await bcrypt.compare(
+                        credentials.password as string,
+                        user.password
+                    );
+                    console.log('[AUTH] Password valid:', isPasswordValid);
 
-                if (!isPasswordValid) return null;
+                    if (!isPasswordValid) return null;
 
-                return {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role,
-                    isApproved: user.isApproved,
-                };
+                    return {
+                        id: user.id,
+                        name: user.name,
+                        email: user.email,
+                        role: user.role,
+                        isApproved: user.isApproved,
+                    };
+                } catch (error) {
+                    console.error('[AUTH] Authorization error:', error);
+                    return null;
+                }
             },
         }),
     ],
