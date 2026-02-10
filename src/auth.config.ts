@@ -11,6 +11,9 @@ export const authConfig = {
             const userRole = auth?.user?.role;
             const isApproved = auth?.user?.isApproved;
 
+            console.log('[MIDDLEWARE] Path:', nextUrl.pathname);
+            console.log('[MIDDLEWARE] Auth User:', auth?.user ? `${auth.user.email} (${auth.user.role})` : 'Not Logged In');
+
             const isAuthPage = nextUrl.pathname === '/login' || nextUrl.pathname === '/signup';
             const isAdminPage = nextUrl.pathname.startsWith('/admin');
             const isDashboardPage = nextUrl.pathname.startsWith('/dashboard');
