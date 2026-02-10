@@ -18,14 +18,27 @@ function LoginForm() {
         setLoading(true);
         setError('');
 
-        const result = await signIn('credentials', {
-            email,
-            password,
-            callbackUrl: '/dashboard',
-        });
+        try {
+            const result = await signIn('credentials', {
+                email,
+                password,
+                redirect: false,
+                callbackUrl: '/dashboard',
+            });
 
-        if (result?.error) {
-            setError('Invalid email or password');
+            if (result?.error) {
+                setError('Invalid email or password');
+                setLoading(false);
+            } else if (result?.ok) {
+                router.push('/dashboard');
+                router.refresh(); // Ensure the router updates the session
+            } else {
+                setError('Login failed without error message');
+                setLoading(false);
+            }
+        } catch (err) {
+            console.error('Login error:', err);
+            setError('An unexpected error occurred');
             setLoading(false);
         }
     };
