@@ -23,18 +23,23 @@ export async function POST(req: Request) {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // First user is admin and approved
-        const userCount = await db.query.users.findMany();
-        const role = userCount.length === 0 ? 'admin' : 'user';
-        const isApproved = userCount.length === 0;
+        const allUsers = await db.query.users.findMany();
+        console.log(`Current user count: ${allUsers.length}`);
+
+        const role = allUsers.length === 0 ? 'admin' : 'user';
+        const isApproved = allUsers.length === 0;
+
+        console.log(`Assigning role: ${role}, approved: ${isApproved} to user: ${email}`);
 
         await db.insert(users).values({
             name,
             email,
             password: hashedPassword,
-            role,
+            role: role as "admin" | "user",
             isApproved,
         });
 
+        console.log('User inserted successfully');
         return NextResponse.json({ message: 'User created' }, { status: 201 });
     } catch (error) {
         console.error('Registration error:', error);

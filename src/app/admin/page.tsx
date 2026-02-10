@@ -13,6 +13,7 @@ export default async function AdminPage() {
         notFound();
     }
 
+
     const allUsers = await db.query.users.findMany({
         orderBy: [desc(users.createdAt)],
         where: session?.user?.id ? ne(users.id, session.user.id) : undefined,

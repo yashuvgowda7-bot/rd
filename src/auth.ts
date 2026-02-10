@@ -17,21 +17,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 password: { label: "Password", type: "password" }
             },
             async authorize(credentials) {
+                console.log(`Auth attempt for: ${credentials?.email}`);
                 if (!credentials?.email || !credentials?.password) return null;
 
                 const user = await db.query.users.findFirst({
                     where: eq(users.email, credentials.email as string),
                 });
 
-                if (!user || !user.password) return null;
+                if (!user || !user.password) {
+                    console.log('User not found or no password');
+                    return null;
+                }
 
                 const isPasswordValid = await bcrypt.compare(
                     credentials.password as string,
                     user.password
                 );
 
-                if (!isPasswordValid) return null;
+                if (!isPasswordValid) {
+                    console.log('Invalid password');
+                    return null;
+                }
 
+                console.log(`User found: ${user.email}, role: ${user.role}`);
                 return {
                     id: user.id,
                     name: user.name,
