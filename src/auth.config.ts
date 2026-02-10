@@ -55,5 +55,5 @@ export const authConfig = {
             return session;
         },
     },
-    providers: [],
+    providers: [], // Add empty providers to satisfy NextAuthConfig type
 } satisfies NextAuthConfig;
