@@ -5,7 +5,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { Shield, LayoutDashboard, LogIn, UserPlus, LogOut } from 'lucide-react';
 
 export function Navbar() {
-    const { data: session, status } = useSession();
+    const { status } = useSession();
     const isLoggedIn = status === 'authenticated';
 
     return (

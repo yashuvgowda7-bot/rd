@@ -7,7 +7,6 @@ import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-    // @ts-ignore
     adapter: DrizzleAdapter(db),
     session: { strategy: 'jwt' },
     providers: [
@@ -51,7 +50,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }),
     ],
     callbacks: {
-        async jwt({ token, user, trigger, session }) {
+        async jwt({ token, user }) {
             if (user) {
                 token.role = user.role;
                 token.isApproved = user.isApproved;

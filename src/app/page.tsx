@@ -1,5 +1,5 @@
 import { Navbar } from '@/components/navbar';
-import { Shield, Users, Database, Zap, ArrowRight, CheckCircle2, Globe, Lock } from 'lucide-react';
+import { Shield, Database, Zap, ArrowRight, CheckCircle2, Globe, Lock } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Home() {
@@ -117,7 +117,7 @@ export default function Home() {
 
               <div className="space-y-8">
                 <h2 className="text-4xl md:text-5xl font-black text-white leading-tight">
-                  Security isn't an option. <br /> It's the <span className="text-indigo-400">Foundation.</span>
+                  Security isn&apos;t an option. <br /> It&apos;s the <span className="text-indigo-400">Foundation.</span>
                 </h2>
                 <ul className="space-y-6">
                   {[
