@@ -10,6 +10,7 @@ function LoginForm() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const router = useRouter();
     const searchParams = useSearchParams();
     const message = searchParams.get('message');
 
