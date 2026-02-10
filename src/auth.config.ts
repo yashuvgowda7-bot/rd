@@ -1,5 +1,4 @@
 import type { NextAuthConfig } from 'next-auth';
-import { NextResponse } from 'next/server';
 
 export const authConfig = {
     pages: {
@@ -17,7 +16,7 @@ export const authConfig = {
 
             if (isAuthPage) {
                 if (isLoggedIn) {
-                    return NextResponse.redirect(new URL('/dashboard', nextUrl));
+                    return Response.redirect(new URL('/dashboard', nextUrl));
                 }
                 return true;
             }
@@ -28,11 +27,11 @@ export const authConfig = {
 
             if (isLoggedIn) {
                 if (isAdminPage && userRole !== 'admin') {
-                    return NextResponse.redirect(new URL('/dashboard', nextUrl));
+                    return Response.redirect(new URL('/dashboard', nextUrl));
                 }
 
                 if (isDashboardPage && !isApproved && userRole !== 'admin') {
-                    return NextResponse.redirect(new URL('/pending', nextUrl));
+                    return Response.redirect(new URL('/pending', nextUrl));
                 }
             }
 
@@ -55,5 +54,7 @@ export const authConfig = {
             return session;
         },
     },
-    providers: [], // Add empty providers to satisfy NextAuthConfig type
+    providers: [],
+    // Fallback for AUTH_SECRET in case it's not set but NEXTAUTH_SECRET is
+    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
 } satisfies NextAuthConfig;
