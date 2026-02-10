@@ -10,7 +10,6 @@ function LoginForm() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const router = useRouter();
     const searchParams = useSearchParams();
     const message = searchParams.get('message');
 
@@ -22,14 +21,12 @@ function LoginForm() {
         const result = await signIn('credentials', {
             email,
             password,
-            redirect: false,
+            callbackUrl: '/dashboard',
         });
 
         if (result?.error) {
             setError('Invalid email or password');
             setLoading(false);
-        } else {
-            router.push('/dashboard');
         }
     };
 
