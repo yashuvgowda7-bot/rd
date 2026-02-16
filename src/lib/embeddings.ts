@@ -1,4 +1,5 @@
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
+const HF_API_KEY = process.env.HF_API_KEY || "";
 
 async function fetchHuggingFaceEmbedding(text: string): Promise<number[]> {
     try {
@@ -11,6 +12,7 @@ async function fetchHuggingFaceEmbedding(text: string): Promise<number[]> {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
+                ...(HF_API_KEY ? { "Authorization": `Bearer ${HF_API_KEY}` } : {}),
             },
             body: JSON.stringify({
                 model: HF_MODEL,
