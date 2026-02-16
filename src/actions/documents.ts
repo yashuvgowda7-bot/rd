@@ -7,7 +7,7 @@ import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, sql, desc, asc } from 'drizzle-orm';
 // @ts-ignore
-import pdf from 'pdf-parse';
+import pdf from 'pdf-parse-fork';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -151,20 +151,30 @@ export async function chatWithDocument(documentId: string, question: string) {
 }
 
 export async function getDocuments() {
-    const session = await auth();
-    if (!session?.user?.id) return [];
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return [];
 
-    return db.query.documents.findMany({
-        where: eq(documents.userId, session.user.id),
-        orderBy: [desc(documents.createdAt)],
-    });
+        return await db.query.documents.findMany({
+            where: eq(documents.userId, session.user.id),
+            orderBy: [desc(documents.createdAt)],
+        });
+    } catch (error) {
+        console.error('getDocuments error:', error);
+        return [];
+    }
 }
 
 export async function getDocument(id: string) {
-    const session = await auth();
-    if (!session?.user?.id) return null;
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return null;
 
-    return db.query.documents.findFirst({
-        where: eq(documents.id, id),
-    });
+        return await db.query.documents.findFirst({
+            where: eq(documents.id, id),
+        });
+    } catch (error) {
+        console.error('getDocument error:', error);
+        return null;
+    }
 }
