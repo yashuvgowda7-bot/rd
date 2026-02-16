@@ -20,49 +20,68 @@ export async function uploadDocument(formData: FormData) {
 
         if (file.type !== 'application/pdf') return { error: 'Only PDF files are supported' };
 
+        console.log(`Starting upload for file: ${file.name}, size: ${file.size}`);
+
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
+        // Use the modern PDFParse API correctly
         const parser = new PDFParse({ data: buffer });
-        const result = await parser.getText();
-        const text = result.text;
+        let text = "";
+        try {
+            const result = await parser.getText();
+            text = result.text;
+        } catch (pdfError) {
+            console.error('PDF Parsing Error:', pdfError);
+            return { error: 'Failed to extract text from PDF' };
+        }
 
-        if (!text || text.length < 10) return { error: 'Could not extract text from PDF' };
+        if (!text || text.length < 10) return { error: 'Document appears to be empty or not readable' };
 
-        // 1. Save Document
+        // 1. Save Document record
         const [doc] = await db.insert(documents).values({
             userId: session.user.id,
             title: file.name,
         }).returning();
 
-        // 2. Chunk Text (Simple implementation)
-        const chunkSize = 1000;
-        const overlap = 200;
+        // 2. Chunk Text
+        const chunkSize = 800; // Smaller chunks for better context window management
+        const overlap = 150;
         const chunks: string[] = [];
 
         for (let i = 0; i < text.length; i += (chunkSize - overlap)) {
-            chunks.push(text.slice(i, i + chunkSize));
+            const chunk = text.slice(i, i + chunkSize).trim();
+            if (chunk.length > 20) {
+                chunks.push(chunk);
+            }
         }
 
-        console.log(`Generated ${chunks.length} chunks for document ${doc.id}`);
+        console.log(`Successfully parsed PDF. Document ID: ${doc.id}. Preparing ${chunks.length} chunks.`);
 
-        // 3. Generate Embeddings & Save Chunks
-        // Process in batches to avoid rate limits or memory issues
-        for (const chunkContent of chunks) {
-            const embedding = await generateEmbedding(chunkContent);
-            await db.insert(documentChunks).values({
-                documentId: doc.id,
-                content: chunkContent,
-                embedding: embedding,
-            });
+        // 3. Generate Embeddings & Save Chunks (Sequential for stability)
+        for (let i = 0; i < chunks.length; i++) {
+            try {
+                const embedding = await generateEmbedding(chunks[i]);
+                await db.insert(documentChunks).values({
+                    documentId: doc.id,
+                    content: chunks[i],
+                    embedding: embedding,
+                });
+            } catch (embedError) {
+                console.error(`Chunk ${i} embedding error:`, embedError);
+                // Continue with other chunks if one fails? Or fail whole upload?
+                // Let's fail if it's the first one, otherwise continue
+                if (i === 0) throw embedError;
+            }
         }
 
+        console.log(`Upload complete for document: ${doc.id}`);
         revalidatePath('/dashboard/documents');
         return { success: true, documentId: doc.id };
 
-    } catch (error) {
-        console.error('Upload Error:', error);
-        return { error: 'Failed to process document' };
+    } catch (error: any) {
+        console.error('CRITICAL Upload Error:', error);
+        return { error: error.message || 'Failed to process document' };
     }
 }
 
@@ -74,23 +93,25 @@ export async function chatWithDocument(documentId: string, question: string) {
         // 1. Embed Question
         const questionEmbedding = await generateEmbedding(question);
 
-        // 2. Vector Search using Cosine Distance (<=>)
-        // Note: vector extension must be enabled
+        // 2. Vector Search
         const similarChunks = await db.select({
             content: documentChunks.content,
-            similarity: sql<number>`1 - (${documentChunks.embedding} <=> ${JSON.stringify(questionEmbedding)})`
         })
             .from(documentChunks)
             .where(eq(documentChunks.documentId, documentId))
             .orderBy(sql`${documentChunks.embedding} <=> ${JSON.stringify(questionEmbedding)}`)
             .limit(5);
 
+        if (!similarChunks.length) {
+            return { answer: "I couldn't find any relevant information in this document to answer your question." };
+        }
+
         const context = similarChunks.map(c => c.content).join('\n---\n');
 
         // 3. LLM Generation
         const prompt = `
-        You are a helpful assistant. Use the following context to answer the user's question.
-        If the answer is not in the context, say so.
+        You are a smart study assistant. Use the following context from a document to answer the user's question.
+        Provide a detailed but concise answer. If the answer is not in the context, clearly state that you cannot find it in the provided document.
         
         CONTEXT:
         ${context}
@@ -115,14 +136,17 @@ export async function chatWithDocument(documentId: string, question: string) {
             })
         });
 
-        if (!response.ok) throw new Error('Failed to fetch from OpenRouter');
+        if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`AI API Error: ${errBody}`);
+        }
 
         const data = await response.json();
         return { answer: data.choices[0]?.message?.content || "No answer generated." };
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Chat Error:', error);
-        return { error: 'Failed to generate answer' };
+        return { error: error.message || 'Failed to generate answer' };
     }
 }
 
