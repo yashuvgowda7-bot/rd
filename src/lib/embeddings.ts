@@ -1,22 +1,14 @@
-import { pipeline } from '@xenova/transformers';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-class EmbeddingService {
-    private static instance: any = null;
+const genAI = new GoogleGenerativeAI(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY || "");
 
-    static async getInstance() {
-        if (!this.instance) {
-            this.instance = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-        }
-        return this.instance;
+export async function generateEmbedding(text: string): Promise<number[]> {
+    try {
+        const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+        const result = await model.embedContent(text);
+        return result.embedding.values;
+    } catch (error) {
+        console.error("Embedding generation error:", error);
+        throw new Error("Failed to generate embedding");
     }
-
-    static async generateEmbedding(text: string): Promise<number[]> {
-        const extractor = await this.getInstance();
-        const output = await extractor(text, { pooling: 'mean', normalize: true });
-        return Array.from(output.data);
-    }
-}
-
-export async function generateEmbedding(text: string) {
-    return EmbeddingService.generateEmbedding(text);
 }

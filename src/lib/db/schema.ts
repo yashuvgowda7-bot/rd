@@ -29,5 +29,5 @@ export const documentChunks = pgTable('document_chunks', {
     id: uuid('id').defaultRandom().primaryKey(),
     documentId: uuid('document_id').references(() => documents.id, { onDelete: 'cascade' }).notNull(),
     content: text('content').notNull(),
-    embedding: vector('embedding', { dimensions: 384 }), // 384 for all-MiniLM-L6-v2
+    embedding: vector('embedding', { dimensions: 768 }), // 768 for Gemini text-embedding-004
 });
