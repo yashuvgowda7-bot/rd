@@ -26,10 +26,14 @@ export async function uploadDocument(formData: FormData) {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // Use the standard pdf-parse API
+        // Use the standard pdf-parse-fork API with fallback for ESM/CJS interop
         let text = "";
         try {
-            const result = await pdf(buffer);
+            const pdfParser = typeof pdf === 'function' ? pdf : (pdf as any).default;
+            if (typeof pdfParser !== 'function') {
+                throw new Error("PDF parser is not a function. Check import configuration.");
+            }
+            const result = await pdfParser(buffer);
             text = result.text;
         } catch (pdfError) {
             console.error('PDF Parsing Error:', pdfError);
