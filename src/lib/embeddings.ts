@@ -3,9 +3,9 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 async function fetchHuggingFaceEmbedding(text: string): Promise<number[]> {
     try {
         const HF_MODEL = "sentence-transformers/all-mpnet-base-v2"; // 768 dimensions
-        const url = `https://api-inference.huggingface.co/pipeline/feature-extraction/${HF_MODEL}`;
+        const url = "https://router.huggingface.co/v1/embeddings";
 
-        console.log(`Falling back to Hugging Face (${HF_MODEL})...`);
+        console.log(`Falling back to Hugging Face Router (${HF_MODEL})...`);
 
         const response = await fetch(url, {
             method: "POST",
@@ -13,25 +13,27 @@ async function fetchHuggingFaceEmbedding(text: string): Promise<number[]> {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                inputs: text,
-                options: { wait_for_model: true }
+                model: HF_MODEL,
+                input: text,
             }),
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Hugging Face API Error: ${errorText}`);
+            throw new Error(`Hugging Face Router API Error: ${errorText}`);
         }
 
-        const embedding = await response.json();
+        const json = await response.json();
+        const embedding = json.data?.[0]?.embedding;
 
         if (!Array.isArray(embedding)) {
-            throw new Error("Hugging Face did not return a valid vector array");
+            console.error("Unexpected HF Router Response:", JSON.stringify(json));
+            throw new Error("Hugging Face Router did not return a valid vector array.");
         }
 
         return embedding;
     } catch (error: any) {
-        console.error("Hugging Face Error:", error.message);
+        console.error("Hugging Face Router Error:", error.message);
         throw error;
     }
 }
