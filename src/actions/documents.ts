@@ -6,7 +6,8 @@ import { generateEmbedding } from '@/lib/embeddings';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, sql, desc, asc } from 'drizzle-orm';
-import { PDFParse } from 'pdf-parse';
+// @ts-ignore
+import pdf from 'pdf-parse';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -25,15 +26,14 @@ export async function uploadDocument(formData: FormData) {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // Use the modern PDFParse API correctly
-        const parser = new PDFParse({ data: buffer });
+        // Use the standard pdf-parse API
         let text = "";
         try {
-            const result = await parser.getText();
+            const result = await pdf(buffer);
             text = result.text;
         } catch (pdfError) {
             console.error('PDF Parsing Error:', pdfError);
-            return { error: 'Failed to extract text from PDF' };
+            return { error: 'Failed to extract text from PDF (Standard API)' };
         }
 
         if (!text || text.length < 10) return { error: 'Document appears to be empty or not readable' };
