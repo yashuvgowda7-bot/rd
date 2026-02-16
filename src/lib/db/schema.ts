@@ -15,3 +15,19 @@ export const users = pgTable('users', {
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+export const documents = pgTable('documents', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    title: text('title').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+import { vector } from 'drizzle-orm/pg-core';
+
+export const documentChunks = pgTable('document_chunks', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    documentId: uuid('document_id').references(() => documents.id, { onDelete: 'cascade' }).notNull(),
+    content: text('content').notNull(),
+    embedding: vector('embedding', { dimensions: 384 }), // 384 for all-MiniLM-L6-v2
+});

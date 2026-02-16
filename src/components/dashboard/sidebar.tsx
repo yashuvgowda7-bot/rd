@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
-import { LayoutDashboard, Users, Settings, LogOut, Shield, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, Shield, BookOpen, Files } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export function Sidebar() {
