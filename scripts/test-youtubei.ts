@@ -29,11 +29,11 @@ async function test() {
         const transcriptData = await info.getTranscript();
 
         if (transcriptData && transcriptData.transcript) {
-            const segments = transcriptData.transcript.content.body.initial_segments;
-            console.log('Transcript found! Segments:', segments.length);
+            const segments = transcriptData.transcript?.content?.body?.initial_segments;
+            const transcriptText = segments?.map((s: any) => s.snippet.text).join(' ') || '';
+            console.log('Transcript found! Segments:', segments?.length || 0);
 
-            const text = segments.map((seg: any) => seg.snippet.text).join(' ');
-            console.log('Preview:', text.substring(0, 100));
+            console.log('Preview:', transcriptText.substring(0, 100));
         } else {
             console.log('No transcript data found.');
         }

@@ -6,7 +6,7 @@ import { generateEmbedding } from '@/lib/embeddings';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { eq, sql, desc, asc } from 'drizzle-orm';
-import pdf from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -22,8 +22,10 @@ export async function uploadDocument(formData: FormData) {
 
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-        const data = await pdf(buffer);
-        const text = data.text;
+
+        const parser = new PDFParse({ data: buffer });
+        const result = await parser.getText();
+        const text = result.text;
 
         if (!text || text.length < 10) return { error: 'Could not extract text from PDF' };
 
