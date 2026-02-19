@@ -3,10 +3,14 @@ const HF_API_KEY = process.env.HF_API_KEY || "";
 
 async function fetchHuggingFaceEmbedding(text: string): Promise<number[]> {
     try {
-        const HF_MODEL = "sentence-transformers/all-mpnet-base-v2"; // 768 dimensions
-        const url = "https://router.huggingface.co/v1/embeddings";
+        // Switching to BGE-base which is 768 dims and more stable for feature extraction
+        const HF_BASE_MODEL = "BAAI/bge-base-en-v1.5";
+        const HF_ROUTER_MODEL = `hf-inference/${HF_BASE_MODEL}`;
 
-        console.log(`Falling back to Hugging Face Router (${HF_MODEL})...`);
+        // 1. Try the OpenAI-compatible router endpoint
+        const url = `https://router.huggingface.co/v1/embeddings`;
+
+        console.log(`Falling back to Hugging Face Router API (${HF_ROUTER_MODEL})...`);
 
         const response = await fetch(url, {
             method: "POST",
@@ -15,27 +19,60 @@ async function fetchHuggingFaceEmbedding(text: string): Promise<number[]> {
                 ...(HF_API_KEY ? { "Authorization": `Bearer ${HF_API_KEY}` } : {}),
             },
             body: JSON.stringify({
-                model: HF_MODEL,
+                model: HF_ROUTER_MODEL,
                 input: text,
             }),
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`Hugging Face Router API Error: ${errorText}`);
+            console.error(`HF Router Error (${response.status}): ${errorText}. Trying raw inference endpoint...`);
+
+            // 2. Fallback: Raw Inference API on the router
+            const directUrl = `https://router.huggingface.co/hf-inference/models/${HF_BASE_MODEL}`;
+            const directResponse = await fetch(directUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(HF_API_KEY ? { "Authorization": `Bearer ${HF_API_KEY}` } : {}),
+                    "x-use-cache": "true"
+                },
+                body: JSON.stringify({ inputs: text }),
+            });
+
+            if (!directResponse.ok) {
+                const directErrorText = await directResponse.text();
+                throw new Error(`Hugging Face Direct API Error: ${directErrorText}`);
+            }
+
+            const result = await directResponse.json();
+
+            // Handle different possible response shapes from HF Inference API (raw)
+            if (Array.isArray(result)) {
+                // If it's [ [...pooler_output...] ]
+                if (Array.isArray(result[0]) && typeof result[0][0] === 'number') {
+                    return result[0];
+                }
+                // If it's [0.1, 0.2, ...]
+                if (typeof result[0] === 'number') {
+                    return result as number[];
+                }
+            }
+
+            throw new Error(`Hugging Face direct API returned unexpected format: ${JSON.stringify(result).slice(0, 100)}`);
         }
 
         const json = await response.json();
         const embedding = json.data?.[0]?.embedding;
 
         if (!Array.isArray(embedding)) {
-            console.error("Unexpected HF Router Response:", JSON.stringify(json));
-            throw new Error("Hugging Face Router did not return a valid vector array.");
+            console.error("Unexpected HF Response Format:", JSON.stringify(json).slice(0, 200));
+            throw new Error("Hugging Face did not return a valid vector array.");
         }
 
         return embedding;
     } catch (error: any) {
-        console.error("Hugging Face Router Error:", error.message);
+        console.error("Hugging Face Flow Error:", error.message);
         throw error;
     }
 }

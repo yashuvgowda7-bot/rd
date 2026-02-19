@@ -17,11 +17,12 @@ export async function uploadDocument(formData: FormData) {
         if (!session?.user?.id) return { error: 'Unauthorized' };
 
         const file = formData.get('file') as File;
+        const workspaceId = formData.get('workspaceId') as string | null;
         if (!file) return { error: 'No file provided' };
 
         if (file.type !== 'application/pdf') return { error: 'Only PDF files are supported' };
 
-        console.log(`Starting upload for file: ${file.name}, size: ${file.size}`);
+        console.log(`Starting upload for file: ${file.name}, size: ${file.size}, workspace: ${workspaceId || 'none'}`);
 
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
@@ -45,6 +46,7 @@ export async function uploadDocument(formData: FormData) {
         // 1. Save Document record
         const [doc] = await db.insert(documents).values({
             userId: session.user.id,
+            workspaceId: workspaceId || null,
             title: file.name,
         }).returning();
 
@@ -73,14 +75,16 @@ export async function uploadDocument(formData: FormData) {
                 });
             } catch (embedError) {
                 console.error(`Chunk ${i} embedding error:`, embedError);
-                // Continue with other chunks if one fails? Or fail whole upload?
-                // Let's fail if it's the first one, otherwise continue
                 if (i === 0) throw embedError;
             }
         }
 
         console.log(`Upload complete for document: ${doc.id}`);
-        revalidatePath('/dashboard/documents');
+        if (workspaceId) {
+            revalidatePath(`/dashboard/workspaces/${workspaceId}`);
+        } else {
+            revalidatePath('/dashboard/documents');
+        }
         return { success: true, documentId: doc.id };
 
     } catch (error: any) {
@@ -89,7 +93,111 @@ export async function uploadDocument(formData: FormData) {
     }
 }
 
-export async function chatWithDocument(documentId: string, question: string) {
+async function performDeepSearch(query: string) {
+    const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
+    if (!FIRECRAWL_API_KEY) {
+        console.warn("Firecrawl API key not found. Skipping deep search.");
+        return [];
+    }
+
+    try {
+        const response = await fetch("https://api.firecrawl.dev/v1/search", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${FIRECRAWL_API_KEY}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                query: query,
+                limit: 3,
+                lang: "en",
+            }),
+        });
+
+        if (!response.ok) {
+            const err = await response.text();
+            console.error("Firecrawl Error:", err);
+            return [];
+        }
+
+        const data = await response.json();
+        return data.data || [];
+    } catch (error) {
+        console.error("Firecrawl Fetch Error:", error);
+        return [];
+    }
+}
+
+async function generateLLMResponse(prompt: string) {
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+    // Try OpenRouter first
+    try {
+        console.log("Attempting OpenRouter LLM generation...");
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3000",
+                "X-Title": "Multi-Doc Workspace Chat",
+            },
+            body: JSON.stringify({
+                "model": "google/gemini-2.0-flash-001",
+                "messages": [{ "role": "user", "content": prompt }]
+            })
+        });
+
+        if (response.status === 402) {
+            console.warn("OpenRouter credits depleted (402). Falling back to Groq...");
+            return await fetchGroqResponse(prompt);
+        }
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            console.error(`OpenRouter failed (${response.status}): ${errBody}. Trying Groq fallback...`);
+            return await fetchGroqResponse(prompt);
+        }
+
+        const data = await response.json();
+        return data.choices[0]?.message?.content || "No answer generated.";
+
+    } catch (error: any) {
+        console.error("OpenRouter primary flow failed:", error.message);
+        return await fetchGroqResponse(prompt);
+    }
+}
+
+async function fetchGroqResponse(prompt: string) {
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    if (!GROQ_API_KEY) {
+        throw new Error("No secondary LLM provider (Groq) configured and OpenRouter failed.");
+    }
+
+    console.log("Using Groq fallback (llama-3.3-70b-versatile)...");
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            "model": "llama-3.3-70b-versatile",
+            "messages": [{ "role": "user", "content": prompt }]
+        })
+    });
+
+    if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`Groq API Error: ${errBody}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0]?.message?.content || "No answer generated.";
+}
+
+export async function chatWithWorkspace(workspaceId: string, question: string, deepSearch: boolean = false) {
     try {
         const session = await auth();
         if (!session?.user?.id) return { error: 'Unauthorized' };
@@ -97,7 +205,64 @@ export async function chatWithDocument(documentId: string, question: string) {
         // 1. Embed Question
         const questionEmbedding = await generateEmbedding(question);
 
-        // 2. Vector Search
+        // 2. Vector Search across all documents in workspace
+        const similarChunks = await db.select({
+            content: documentChunks.content,
+            docTitle: documents.title,
+            docId: documents.id,
+        })
+            .from(documentChunks)
+            .innerJoin(documents, eq(documentChunks.documentId, documents.id))
+            .where(eq(documents.workspaceId, workspaceId))
+            .orderBy(sql`${documentChunks.embedding} <=> ${JSON.stringify(questionEmbedding)}`)
+            .limit(8);
+
+        let context = similarChunks.map(c => `[Source: ${c.docTitle}] ${c.content}`).join('\n---\n');
+
+        // 3. Optional Deep Search
+        let webContent = "";
+        if (deepSearch) {
+            const searchResults = await performDeepSearch(question);
+            webContent = searchResults.map((r: any) => `[Web Source: ${r.url}] ${r.title}\n${r.markdown || r.description || ''}`).join('\n---\n');
+            if (webContent) {
+                context += `\n\nWEB SEARCH RESULTS:\n${webContent}`;
+            }
+        }
+
+        if (!similarChunks.length && !webContent) {
+            return { answer: "I couldn't find any relevant information in the workspace or the web to answer your question." };
+        }
+
+        // 4. LLM Generation
+        const prompt = `
+        You are a smart study assistant. Use the following context from multiple documents and/or web results to answer the user's question.
+        Provide a detailed but concise answer. 
+        IMPORTANT: You MUST cite your sources. When you use information from a document, mention its title (e.g., "[Source: Document Name]"). If you use information from a web search, mention the URL.
+        
+        CONTEXT:
+        ${context}
+        
+        QUESTION:
+        ${question}
+        `;
+
+        const answer = await generateLLMResponse(prompt);
+        return { answer };
+
+    } catch (error: any) {
+        console.error('Workspace Chat Error:', error);
+        return { error: error.message || 'Failed to generate answer' };
+    }
+}
+
+export async function chatWithDocument(documentId: string, question: string) {
+    // Legacy support or single-doc chat (could be refactored to use a temporary workspace or similar)
+    try {
+        const session = await auth();
+        if (!session?.user?.id) return { error: 'Unauthorized' };
+
+        const questionEmbedding = await generateEmbedding(question);
+
         const similarChunks = await db.select({
             content: documentChunks.content,
         })
@@ -112,7 +277,6 @@ export async function chatWithDocument(documentId: string, question: string) {
 
         const context = similarChunks.map(c => c.content).join('\n---\n');
 
-        // 3. LLM Generation
         const prompt = `
         You are a smart study assistant. Use the following context from a document to answer the user's question.
         Provide a detailed but concise answer. If the answer is not in the context, clearly state that you cannot find it in the provided document.
@@ -124,29 +288,8 @@ export async function chatWithDocument(documentId: string, question: string) {
         ${question}
         `;
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3000",
-                "X-Title": "RBAC Dashboard Document Chat",
-            },
-            body: JSON.stringify({
-                "model": "google/gemini-2.0-flash-001",
-                "messages": [
-                    { "role": "user", "content": prompt }
-                ]
-            })
-        });
-
-        if (!response.ok) {
-            const errBody = await response.text();
-            throw new Error(`AI API Error: ${errBody}`);
-        }
-
-        const data = await response.json();
-        return { answer: data.choices[0]?.message?.content || "No answer generated." };
+        const answer = await generateLLMResponse(prompt);
+        return { answer };
 
     } catch (error: any) {
         console.error('Chat Error:', error);

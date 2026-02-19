@@ -15,6 +15,7 @@ export function Sidebar() {
         { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
         ...(isAdmin ? [{ name: 'User Management', href: '/admin', icon: Users }] : []),
         { name: 'Study', href: '/dashboard/study', icon: BookOpen },
+        { name: 'Workspaces', href: '/dashboard/workspaces', icon: LayoutDashboard }, // Using LayoutDashboard as a folder-like icon or similar
         { name: 'Documents', href: '/dashboard/documents', icon: Files },
         { name: 'Settings', href: '/settings', icon: Settings },
     ];
