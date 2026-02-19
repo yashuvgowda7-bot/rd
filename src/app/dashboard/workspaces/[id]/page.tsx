@@ -5,6 +5,8 @@ import { WorkspaceUploadForm } from './upload-form';
 import Link from 'next/link';
 import { ChevronLeft, FileText, Settings } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
     params: Promise<{ id: string }>;
 }

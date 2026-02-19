@@ -1,4 +1,6 @@
 import { auth } from '@/auth';
+
+export const dynamic = 'force-dynamic';
 import { Activity, Users, CheckCircle, Clock, Shield, Database, Layout, Bell, Terminal, Key, Cpu } from 'lucide-react';
 
 export default async function DashboardPage() {

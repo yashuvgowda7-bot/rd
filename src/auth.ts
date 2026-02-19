@@ -4,7 +4,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { compare } from 'bcrypt-ts';
 import { authConfig } from './auth.config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -16,16 +16,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             async authorize(credentials) {
                 if (!credentials?.email || !credentials?.password) return null;
 
+                const start = performance.now();
+
                 const user = await db.query.users.findFirst({
                     where: eq(users.email, credentials.email as string),
                 });
 
+                const dbLookupTime = performance.now() - start;
+                console.log(`[AUTH] DB Lookup took: ${dbLookupTime.toFixed(2)}ms`);
+
                 if (!user || !user.password) return null;
 
-                const isPasswordValid = await bcrypt.compare(
+                const compareStart = performance.now();
+                const isPasswordValid = await compare(
                     credentials.password as string,
                     user.password
                 );
+                const compareTime = performance.now() - compareStart;
+                console.log(`[AUTH] Password comparison took: ${compareTime.toFixed(2)}ms`);
 
                 if (!isPasswordValid) return null;
 

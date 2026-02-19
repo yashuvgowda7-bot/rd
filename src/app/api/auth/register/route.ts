@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { users } from '@/lib/db/schema';
-import bcrypt from 'bcryptjs';
+import { hash } from 'bcrypt-ts';
 import { eq } from 'drizzle-orm';
 
 export async function POST(req: Request) {
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'User already exists' }, { status: 400 });
         }
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await hash(password, 10);
 
         // First user is admin and approved
         const allUsers = await db.query.users.findMany();

@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { Folder, ChevronRight, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 
+export const dynamic = 'force-dynamic';
+
 export default async function WorkspacesPage() {
     const workspaces = await getWorkspaces();
 

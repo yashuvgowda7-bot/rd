@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { FileText, MessageSquare, Plus, Files } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DocumentsPage() {
     // Fetch documents on the server
     const documents = await getDocuments();
